@@ -10,6 +10,8 @@ const youtubedl = require("youtube-dl-exec");
 const ffmpegPath = require("ffmpeg-static"); 
 const axios = require('axios')
 const FormData = require("form-data"); 
+require("dotenv").config();
+
 // const cloudinary  =require('cloudinary')
 // Import ffmpeg-static path
 
@@ -26,9 +28,10 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 //   api_secret: 'qjvO1tlztcqWmn5gcwzhguQOwFg',
 // });
 
+const baseUrl = process.env.BASE_URL;
 
 const app = express();
-const port = 3000;
+const port = process.env.BASE_URL||3000;
 const tempDir = "./temp";
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
@@ -153,10 +156,20 @@ app.post("/download-and-trim", async (req, res) => {
   }
 
   try {
-    // Convert time from minutes to seconds
-    const startTimeInSeconds = startTime * 60;
-    const endTimeInSeconds = endTime * 60;
+    // Convert time from minutes/seconds to seconds
+    const startTimeInSeconds = parseFloat(startTime); // This is now in seconds
+    const endTimeInSeconds = parseFloat(endTime); // This is also in seconds
+
+    if (isNaN(startTimeInSeconds) || isNaN(endTimeInSeconds)) {
+      return res.status(400).json({ error: "Invalid time format provided." });
+    }
+
     const durationInSeconds = endTimeInSeconds - startTimeInSeconds;
+    if (durationInSeconds <= 0) {
+      return res
+        .status(400)
+        .json({ error: "End time must be greater than start time." });
+    }
 
     const fileId = uuidv4();
     const inputFilePath = path.join(tempDir, `${fileId}-input.mp4`);
@@ -169,7 +182,7 @@ app.post("/download-and-trim", async (req, res) => {
     console.log(
       `Trimming video: ${startTimeInSeconds}s to ${endTimeInSeconds}s`
     );
-    // Trim the video
+    // Trim the video using ffmpeg (or similar tool)
     await trimVideo(
       inputFilePath,
       startTimeInSeconds,
@@ -182,22 +195,18 @@ app.post("/download-and-trim", async (req, res) => {
     // Extract audio from trimmed video
     await extractAudio(trimmedFilePath, audioFilePath);
 
-    // Clean up temporary files after processing
-    deleteFile(inputFilePath);
-    deleteFile(trimmedFilePath);
+    // Clean up temporary video file
+    fs.unlinkSync(inputFilePath);
+    fs.unlinkSync(trimmedFilePath);
 
-    // Create base URL for file downloads
-    const baseUrl = "http://localhost:3000"; // Change this to your server's base URL
-    const trimmedVideoUrl = `${baseUrl}/files/${path.basename(
-      trimmedFilePath
-    )}`;
-    const audioFileUrl = `${baseUrl}/files/${path.basename(audioFilePath)}`;
+    // Send the audio file directly as a response for download
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Disposition", `attachment; filename=${fileId}.mp3`);
+    fs.createReadStream(audioFilePath).pipe(res);
 
-    // Send success response with URLs for direct download
-    res.json({
-      message: "Video trimmed and MP3 generated successfully.",
-      trimmedVideoUrl: trimmedVideoUrl,
-      audioUrl: audioFileUrl,
+    // Optional: Delete the file after it's sent to avoid leaving it on the server
+    res.on("finish", () => {
+      fs.unlinkSync(audioFilePath);
     });
   } catch (error) {
     console.error("Error:", error.message);
@@ -206,6 +215,7 @@ app.post("/download-and-trim", async (req, res) => {
       .json({ error: "An error occurred while processing the video." });
   }
 });
+
 
 // Download endpoint
 app.get("/download/:filename", (req, res) => {
