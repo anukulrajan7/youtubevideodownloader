@@ -31,7 +31,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const baseUrl = process.env.BASE_URL;
 
 const app = express();
-const port = process.env.BASE_URL||3000;
+const port = process.env.PORT||3000;
 const tempDir = "./temp";
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
