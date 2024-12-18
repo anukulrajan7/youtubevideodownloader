@@ -39,7 +39,7 @@ if (!fs.existsSync(tempDir)) {
 
 // Enable CORS
 const corsOptions = {
-  origin: ["http://localhost:5173"], // Add your allowed domains
+  origin: ["http://localhost:5173", "https://youtubevideotomp3.netlify.app/"], // Add your allowed domains
   methods: ["GET", "POST"],
 };
 app.use(cors(corsOptions));
@@ -147,6 +147,30 @@ const extractAudio = (trimmedFilePath, audioFilePath) => {
 };
 
 
+const parseTime = (timeStr) => {
+  const timeUnitRegex = /^(\d+(\.\d+)?)([ms])$/i;
+  const match = timeStr.match(timeUnitRegex);
+
+  if (!match) {
+    throw new Error(
+      "Invalid time format. Please use 'm' for minutes and 's' for seconds."
+    );
+  }
+
+  const value = parseFloat(match[1]);
+  const unit = match[3].toLowerCase(); // 'm' or 's'
+
+  if (unit === "m") {
+    return value * 60; // Convert minutes to seconds
+  } else if (unit === "s") {
+    return value; // Already in seconds
+  }
+
+  throw new Error(
+    "Invalid time unit. Only 'm' (minutes) and 's' (seconds) are allowed."
+  );
+};
+
 app.post("/download-and-trim", async (req, res) => {
   const { videoUrl, startTime, endTime } = req.body;
 
@@ -156,9 +180,9 @@ app.post("/download-and-trim", async (req, res) => {
   }
 
   try {
-    // Convert time from minutes/seconds to seconds
-    const startTimeInSeconds = parseFloat(startTime); // This is now in seconds
-    const endTimeInSeconds = parseFloat(endTime); // This is also in seconds
+    // Convert startTime and endTime to seconds by assuming they are in minutes
+    const startTimeInSeconds = parseFloat(startTime) * 60;
+    const endTimeInSeconds = parseFloat(endTime) * 60;
 
     if (isNaN(startTimeInSeconds) || isNaN(endTimeInSeconds)) {
       return res.status(400).json({ error: "Invalid time format provided." });
@@ -215,6 +239,7 @@ app.post("/download-and-trim", async (req, res) => {
       .json({ error: "An error occurred while processing the video." });
   }
 });
+
 
 
 // Download endpoint
